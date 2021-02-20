@@ -15,6 +15,16 @@
   "functions": [],
   "resources": [
     {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[format('{0}single-resource-name', parameters('name'))]",
+      "location": "[resourceGroup().location]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      }
+    },
+    {
       "copy": {
         "name": "storageAccounts",
         "count": "[length(parameters('accounts'))]"
@@ -26,7 +36,71 @@
       "kind": "StorageV2",
       "sku": {
         "name": "Standard_LRS"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', format('{0}single-resource-name', parameters('name')))]"
+      ]
+    },
+    {
+      "copy": {
+        "name": "storageAccounts2",
+        "count": "[length(parameters('accounts'))]"
+      },
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[format('{0}-collection-{1}', parameters('name'), parameters('accounts')[copyIndex()].name)]",
+      "location": "[parameters('accounts')[copyIndex()].location]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "dependsOn": [
+        "storageAccounts"
+      ]
+    },
+    {
+      "copy": {
+        "name": "firstSet",
+        "count": "[length(range(0, length(parameters('accounts'))))]"
+      },
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[format('{0}-set1-{1}', parameters('name'), range(0, length(parameters('accounts')))[copyIndex()])]",
+      "location": "[resourceGroup().location]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
       }
+    },
+    {
+      "copy": {
+        "name": "secondSet",
+        "count": "[length(range(0, length(parameters('accounts'))))]"
+      },
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[format('{0}-set2-{1}', parameters('name'), range(0, length(parameters('accounts')))[copyIndex()])]",
+      "location": "[resourceGroup().location]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', format('{0}-set1-{1}', parameters('name'), range(0, length(parameters('accounts')))[range(0, length(parameters('accounts')))[copyIndex()]]))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[format('{0}single-resource-name', parameters('name'))]",
+      "location": "[resourceGroup().location]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "dependsOn": [
+        "secondSet"
+      ]
     }
   ],
   "outputs": {
@@ -53,6 +127,17 @@
     "indexedCollectionIdentity": {
       "type": "object",
       "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name)), '2019-06-01', 'full').identity]"
+    },
+    "indexedEndpointPair": {
+      "type": "object",
+      "value": {
+        "primary": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name))).primaryEndpoints.blob]",
+        "secondary": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[add(parameters('index'), 1)].name))).secondaryEndpoints.blob]"
+      }
+    },
+    "indexViaReference": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[int(reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name))).creationTime)].name))).accessTier]"
     }
   }
 }
