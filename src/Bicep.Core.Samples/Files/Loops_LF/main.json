@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "name": {
+      "type": "string"
+    },
+    "accounts": {
+      "type": "array"
+    },
+    "index": {
+      "type": "int"
+    }
+  },
+  "functions": [],
+  "resources": [
+    {
+      "copy": {
+        "name": "storageAccounts",
+        "count": "[length(parameters('accounts'))]"
+      },
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-06-01",
+      "name": "[format('{0}-collection-{1}', parameters('name'), parameters('accounts')[copyIndex()].name)]",
+      "location": "[parameters('accounts')[copyIndex()].location]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      }
+    }
+  ],
+  "outputs": {
+    "indexedCollectionBlobEndpoint": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name))).primaryEndpoints.blob]"
+    },
+    "indexedCollectionName": {
+      "type": "string",
+      "value": "[format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name)]"
+    },
+    "indexedCollectionId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name))]"
+    },
+    "indexedCollectionType": {
+      "type": "string",
+      "value": "Microsoft.Storage/storageAccounts"
+    },
+    "indexedCollectionVersion": {
+      "type": "string",
+      "value": "2019-06-01"
+    },
+    "indexedCollectionIdentity": {
+      "type": "object",
+      "value": "[reference(resourceId('Microsoft.Storage/storageAccounts', format('{0}-collection-{1}', parameters('name'), parameters('accounts')[parameters('index')].name)), '2019-06-01', 'full').identity]"
+    }
+  }
+}

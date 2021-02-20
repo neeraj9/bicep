@@ -169,27 +169,61 @@ namespace Bicep.Core.Emit
 
         private LanguageExpression ConvertPropertyAccess(PropertyAccessSyntax propertyAccess)
         {
-            if (propertyAccess.BaseExpression is VariableAccessSyntax propVariableAccess &&
-                context.SemanticModel.GetSymbolInfo(propVariableAccess) is ResourceSymbol resourceSymbol)
+            // local function
+            LanguageExpression? ConvertResourcePropertyAccess(ResourceSymbol resourceSymbol, SyntaxBase? indexExpression, SyntaxBase newContext)
             {
+                var typeReference = resourceSymbol.IsCollection
+                    ? EmitHelpers.GetResourceCollectionTypeReference(resourceSymbol)
+                    : EmitHelpers.GetSingleResourceTypeReference(resourceSymbol);
+
                 // special cases for certain resource property access. if we recurse normally, we'll end up
                 // generating statements like reference(resourceId(...)).id which are not accepted by ARM
 
-                var typeReference = EmitHelpers.GetSingleResourceTypeReference(resourceSymbol);
                 switch (propertyAccess.PropertyName.IdentifierName)
                 {
                     case "id":
-                        return GetLocallyScopedResourceId(resourceSymbol, propertyAccess);
+                        // the ID is dependent on the name expression which could involve locals in case of a resource collection
+                        return this
+                            .CreateConverterForIndexReplacement(GetResourceNameSyntax(resourceSymbol), indexExpression, propertyAccess)
+                            .GetLocallyScopedResourceId(resourceSymbol, propertyAccess);
                     case "name":
-                        return GetResourceNameExpression(resourceSymbol);
+                        // the name is dependent on the name expression which could involve locals in case of a resource collection
+                        return this
+                            .CreateConverterForIndexReplacement(GetResourceNameSyntax(resourceSymbol), indexExpression, propertyAccess)
+                            .GetResourceNameExpression(resourceSymbol);
                     case "type":
                         return new JTokenExpression(typeReference.FullyQualifiedType);
                     case "apiVersion":
                         return new JTokenExpression(typeReference.ApiVersion);
                     case "properties":
                         // use the reference() overload without "full" to generate a shorter expression
-                        return GetReferenceExpression(resourceSymbol, typeReference, false, propertyAccess);
+                        // this is dependent on the name expression which could involve locals in case of a resource collection
+                        return this
+                            .CreateConverterForIndexReplacement(GetResourceNameSyntax(resourceSymbol), indexExpression, propertyAccess)
+                            .GetReferenceExpression(resourceSymbol, typeReference, false, propertyAccess);
                 }
+
+                return null;
+            }
+
+            if (propertyAccess.BaseExpression is VariableAccessSyntax propVariableAccess &&
+                context.SemanticModel.GetSymbolInfo(propVariableAccess) is ResourceSymbol resourceSymbol &&
+                ConvertResourcePropertyAccess(resourceSymbol, null, propertyAccess) is { } convertedSingle)
+            {
+                // we are doing property access on a single resource
+                // and we are dealing with special case properties
+                return convertedSingle;
+            }
+
+            if(propertyAccess.BaseExpression is ArrayAccessSyntax propArrayAccess &&
+                propArrayAccess.BaseExpression is VariableAccessSyntax arrayVariableAccess &&
+                context.SemanticModel.GetSymbolInfo(arrayVariableAccess) is ResourceSymbol resourceCollectionSymbol && 
+                ConvertResourcePropertyAccess(resourceCollectionSymbol, propArrayAccess.IndexExpression, propertyAccess) is { } convertedCollection)
+            {
+
+                // we are doing property access on an array access of a resource collection
+                // and we are dealing with special case properties
+                return convertedCollection;
             }
 
             // is this a (<child>.outputs).<prop> propertyAccess?
